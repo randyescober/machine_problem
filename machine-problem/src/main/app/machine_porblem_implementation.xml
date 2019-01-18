@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:cluster="http://www.mulesoft.org/schema/mule/ee/cluster" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:context="http://www.springframework.org/schema/context" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <db:mysql-config name="MySQL_Configuration" host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" doc:name="MySQL Configuration"/>
+    <context:property-placeholder location="machine_problem.properties"/>
+    <configuration doc:name="Configuration">
+       <expression-language>
+        <import class="java.text.SimpleDateFormat"/>
+             <global-functions>
+                 def formatDate(dateInString) {
+                 	 import java.text.SimpleDateFormat;
+	                 SimpleDateFormat dateFormat = new SimpleDateFormat('yyyy-MM-dd'); 
+	                 return dateFormat.parse(dateInString);
+                  }
+             </global-functions>
+         </expression-language>
+    </configuration>
+    <flow name="getUsersFlow">
+        <flow-ref name="validateToken" doc:name="validateToken"/>
+        <db:select config-ref="MySQL_Configuration" doc:name="GetUsersDetails">
+            <db:parameterized-query><![CDATA[SELECT
+A.userName,A.fullName,A.birthdate,A.gender,A.dateRegistered
+FROM
+UserDetails A inner join UserAccount B
+on A.userId = B.userID where B.active = 1]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Choice">
+            <when expression="payload.size() &gt; 0">
+                <dw:transform-message doc:name="Transform Message" metadata:id="3de57be7-369a-4581-ba27-488c1cea0110">
+                    <dw:input-payload doc:sample="sample_data\list_map_2.dwl"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var currentYear = now.year
+%var currentMonth = now.month
+%var currentDay = now.day
+---
+{
+	Users: payload map ((payload01 , indexOfPayload01) -> {
+		username: payload01.userName,
+		fullname: payload01.fullName,
+		(
+		 	{
+			age: currentYear - payload01.birthdate.year -1
+			}
+				when (currentMonth < payload01.birthdate.month)
+		 	otherwise {
+				age: currentYear - payload01.birthdate.year -1
+			} when currentMonth == payload01.birthdate.month 
+				and currentDay < payload01.birthdate.day
+		 	otherwise {
+				age: currentYear - payload01.birthdate.year
+			} 
+		 ),
+		({
+			gender: "Male"
+		} when payload01.gender == "M"
+		 otherwise
+		 {
+			gender: "Female"
+		}),
+		dateRegistered: payload01.dateRegistered as :string
+		
+	})
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <file:outbound-endpoint path="src/main/resources/output" outputPattern="users.json" responseTimeout="10000" doc:name="Write All Users"/>
+                <logger level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <flow-ref name="NoUserFound" doc:name="Call User Not Found"/>
+            </otherwise>
+        </choice>
+        <exception-strategy ref="global" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="getUserbyUserName">
+        <flow-ref name="validateToken" doc:name="validateToken"/>
+        <db:select config-ref="MySQL_Configuration" doc:name="Get User by username">
+            <db:parameterized-query><![CDATA[SELECT
+A.userName,A.fullName,A.birthdate,A.gender,A.dateRegistered,B.active
+FROM
+UserDetails A inner join UserAccount B on A.userId = B.userID
+WHERE
+A.userName = #[message.inboundProperties.'http.request.uri'.userName] and B.active = 1]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Choice">
+            <when expression="payload.size() &gt; 0">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:input-payload doc:sample="sample_data\list_map_1.dwl"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var currentYear = now.year
+%var currentMonth = now.month
+%var currentDay = now.day
+---
+{
+	User: payload map ((payload01 , indexOfPayload01) -> {
+		username: payload01.userName,
+		fullname: payload01.fullName,
+		(
+		 	{
+			age: currentYear - payload01.birthdate.year -1
+		}
+		 	when (currentMonth < payload01.birthdate.month)
+		 	otherwise {
+			age: currentYear - payload01.birthdate.year -1
+		} when currentMonth == payload01.birthdate.month 
+		 	and currentDay < payload01.birthdate.day
+		 	otherwise {
+			age: currentYear - payload01.birthdate.year
+		} 
+		 ),
+		({
+			gender: "Male"
+		} when payload01.gender == "M"
+		 otherwise
+		 {
+			gender: "Female"
+		}),
+		dateRegistered:	payload01.dateRegistered as :string {format: "yyyy-MM-dd"}
+	})
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <file:outbound-endpoint path="src/main/resources/output" outputPattern="user.json" responseTimeout="10000" doc:name="write user to file"/>
+                <logger level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <flow-ref name="NoUserFound" doc:name="Call User Not found"/>
+            </otherwise>
+        </choice>
+        <exception-strategy ref="global" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <sub-flow name="validateToken">
+        <validation:is-true expression="#[message.inboundProperties.'client_id' == 'j32io33ise4k2qq1']" doc:name="Validation" message="Invalid token"/>
+    </sub-flow>
+    <flow name="NoUserFound">
+        <set-payload value="{&quot;message&quot;:&quot;user not found&quot;, &quot;errorCode&quot;: 404 }" doc:name="Set Payload"/>
+        <set-property propertyName="http.status" value="404" doc:name="Property"/>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+    <choice-exception-strategy name="global">
+        <catch-exception-strategy when="#[exception.message == 'Invalid token.']" doc:name="Invalid Token Exception">
+            <set-payload value="Unauthorized" doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="400" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        <catch-exception-strategy doc:name="System Error">
+            <set-payload value="{&quot;message&quot;:&quot;system error&quot;,&quot;errorCode&quot;: 500}" doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="500" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+    </choice-exception-strategy>
+  
+</mule>

@@ -1,0 +1,61 @@
+#%RAML 1.0
+baseUri: https://anypoint.mulesoft.com/mocking/api/v1/links/415540df-c53c-4044-9563-d2c5c1bf049b/ # 
+title: machine_problem
+
+/getUsers:
+  get:
+    headers:
+      client_id:
+        required: true
+    responses:
+      200:
+        body:
+          application/json:
+            example: |
+              "Users": {
+                {
+                  "username":"john123",
+                  "fullname":"John White Smith",
+                  "age":23,
+                  "gender":"male",
+                  "dateRegistered":"20-08-2012"
+                },
+                {
+                  "username":"jackpeters",
+                  "fullname":"Jack Peters",
+                  "age":25,
+                  "gender":"male",
+                  "dateRegistered":"25-09-2014"
+                },
+                {
+                  "username":"jenniesummers",
+                  "fullname":"Jennie Summers",
+                  "age":24,
+                  "gender":"female",
+                  "dateRegistered":"20-08-2013"
+                }
+              }
+         
+/getUser:
+  /{userName}:
+    get:
+      responses:
+        200:
+          body:
+            application/json:
+              example: | 
+                {
+                  "userName":"Hello",
+                  "fullName":"Hello World",
+                  "age":"28",
+                  "gender":"Female",
+                  "dateRegistered":""
+                }
+          
+
+      
+
+
+      
+
+      

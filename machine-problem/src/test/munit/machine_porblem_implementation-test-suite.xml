@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:mock="http://www.mulesoft.org/schema/mule/mock" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:machine_porblem_implementation.xml"/>
+    </spring:beans>
+    <munit:test name="testNoUsersFound" description="Test No Users Found" >
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GetUsersDetails']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[new java.util.LinkedList()]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Validate">
+            <munit:inbound-properties>
+                <munit:inbound-property key="client_id" value="j32io33ise4k2qq1"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="getUsersFlow" doc:name="Flow Reference"/>
+        <munit:assert-payload-equals message="Invalid #[payload]" expectedValue="#[payload]" doc:name="Assert Payload"/>
+    </munit:test>
+    <munit:test name="testUsersFound" description="Test Users Found" >
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GetUsersDetails']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'birthdate': formatDate('2003-10-01'),'dateRegistered': formatDate('2003-10-01'),'fullName': 'Randy Escober', 'gender': 'M','userName': 'rescober'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set Message">
+            <munit:inbound-properties>
+                <munit:inbound-property key="client_id" value="j32io33ise4k2qq1"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="getUsersFlow" doc:name="Flow-ref to getUsersFlow"/>
+        <munit:assert-payload-equals message="Valid payload #[message.payloadAs(java.lang.String)]" expectedValue="#[payload]" doc:name="Assert Payload"/>
+    </munit:test>
+    <munit:test name="testgetUserbyUserName" description="Test" >
+        <mock:when messageProcessor=".*:.*" doc:name="MockGetUserByUserName">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Get User by username']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'active': 1,'birthdate': formatDate('2003-10-01'),'dateRegistered': formatDate('2003-10-01'),'fullName': 'Randy Escober','gender': 'M','userName': 'rescober'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Validate Token">
+            <munit:inbound-properties>
+                <munit:inbound-property key="client_id" value="j32io33ise4k2qq1"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <set-property propertyName="userName" value="#['rescober']" doc:name="Property"/>
+        <flow-ref name="getUserbyUserName" doc:name="Flow-ref to getUserbyUserName"/>
+        <mock:verify-call messageProcessor=".*:.*" doc:name="Verify Call Write To File">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['write user to file']"/>
+            </mock:with-attributes>
+        </mock:verify-call>
+        <munit:assert-payload-equals expectedValue="#[payload]" doc:name="Assert Payload"/>
+    </munit:test>
+<munit:test name="testNoUserFound" description="Test No User Found" >
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Get User by username']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[new java.util.LinkedList()]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Validate">
+            <munit:inbound-properties>
+                <munit:inbound-property key="client_id" value="j32io33ise4k2qq1"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="getUserbyUserName" doc:name="Flow Reference getUserbyUserName"/>
+        <munit:assert-payload-equals message="Invalid #[payload]" expectedValue="#[payload]" doc:name="Assert Payload"/>
+    </munit:test>
+    
+        <munit:test name="InvalidTokenTest" description="Test Invalid Token">
+            <mock:when messageProcessor=".*:.*" doc:name="mockInvalidToken">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Validation']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[new java.util.LinkedList()]"/>
+            </mock:when>
+            <munit:set payload="#[]" doc:name="validate token">
+                <munit:inbound-properties>
+                    <munit:inbound-property key="client_id" value="1"/>
+                </munit:inbound-properties>
+            </munit:set>
+            <flow-ref name="getUsersFlow" doc:name="Copy_of_Flow Reference getUserbyUserName"/>
+            <munit:assert-payload-equals message="Invalid #[payload]" expectedValue="Unauthorized" doc:name="Copy_of_Assert Payload"/>
+        </munit:test>
+    
+
+</mule>

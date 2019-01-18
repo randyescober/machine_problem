@@ -1,0 +1,39 @@
+{
+  "Users": [
+    {
+      "username": "rescober",
+      "fullname": "Randy Escober",
+      "age": 31,
+      "gender": "Male",
+      "dateRegistered": "2019-01-01T00:00:00"
+    },
+    {
+      "username": "ldeguzman",
+      "fullname": "Liza De Guzman",
+      "age": 40,
+      "gender": "Female",
+      "dateRegistered": "2019-01-09T00:00:00"
+    },
+    {
+      "username": "kbasas",
+      "fullname": "Karl Basas",
+      "age": 38,
+      "gender": "Male",
+      "dateRegistered": "2019-01-06T00:00:00"
+    },
+    {
+      "username": "jmsamson",
+      "fullname": "Mack Samson",
+      "age": 31,
+      "gender": "Male",
+      "dateRegistered": "2019-01-14T00:00:00"
+    },
+    {
+      "username": "sfajardo",
+      "fullname": "Shenna Fajardo",
+      "age": 31,
+      "gender": "Female",
+      "dateRegistered": "2019-01-05T00:00:00"
+    }
+  ]
+}
