@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:cluster="http://www.mulesoft.org/schema/mule/ee/cluster" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:context="http://www.springframework.org/schema/context" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+<mule xmlns:schedulers="http://www.mulesoft.org/schema/mule/schedulers"
+	xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp" xmlns:cluster="http://www.mulesoft.org/schema/mule/ee/cluster" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:context="http://www.springframework.org/schema/context" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:spring="http://www.springframework.org/schema/beans" 
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/schedulers http://www.mulesoft.org/schema/mule/schedulers/current/mule-schedulers.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
 http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
@@ -12,7 +14,8 @@ http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mu
 http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
 http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
 http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd">
     <db:mysql-config name="MySQL_Configuration" host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" doc:name="MySQL Configuration"/>
     <context:property-placeholder location="machine_problem.properties"/>
     <configuration doc:name="Configuration">
@@ -27,6 +30,7 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
              </global-functions>
          </expression-language>
     </configuration>
+    <smtp:gmail-connector name="Gmail" validateConnections="true" doc:name="Gmail"/>
     <flow name="getUsersFlow">
         <flow-ref name="validateToken" doc:name="validateToken"/>
         <db:select config-ref="MySQL_Configuration" doc:name="GetUsersDetails">
@@ -132,7 +136,8 @@ A.userName = #[message.inboundProperties.'http.request.uri'.userName] and B.acti
 	})
 }]]></dw:set-payload>
                 </dw:transform-message>
-                <file:outbound-endpoint path="src/main/resources/output" outputPattern="user.json" responseTimeout="10000" doc:name="write user to file"/>
+                <flow-ref name="writeToFileFlow" doc:name="Write To File Flow"/>
+
                 <logger level="INFO" doc:name="Logger"/>
             </when>
             <otherwise>
@@ -140,6 +145,27 @@ A.userName = #[message.inboundProperties.'http.request.uri'.userName] and B.acti
             </otherwise>
         </choice>
         <exception-strategy ref="global" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="CallSendEmail" initialState="stopped">
+        <file:inbound-endpoint responseTimeout="10000" doc:name="File" path="src/main/resources/output"/>
+        <file:file-to-string-transformer doc:name="File to String"/>
+        <flow-ref name="sendEmailFlow" doc:name="Send Email Flow"/>
+    </flow>
+    <flow name="writeToFileFlow">
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+        <file:outbound-endpoint path="src/main/resources/output" outputPattern="user.json" responseTimeout="10000" doc:name="write user to file"/>
+    </flow>
+    <flow name="startGroovyFlow">
+        <poll doc:name="Poll">
+            <schedulers:cron-scheduler expression="0 10 0 * * ? *"/>
+            <expression-transformer expression="#[groovy:if(muleContext.registry.lookupFlowConstruct('CallSendEmail').isStopped()){muleContext.registry.lookupFlowConstruct('CallSendEmail').start()}]" doc:name="Start processMailFlow" returnSourceIfNull="true"/>
+        </poll>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="sendEmailFlow">
+        <set-attachment attachmentName="attachement" value="#[payload]" contentType="application/json" doc:name="Attachment"/>
+        <smtp:outbound-endpoint host="smtp.gmail.com" port="587" user="f4muletest@gmail.com" password="deloitte1" connector-ref="Gmail" to="randyescober@gmail.com" from="noreply@gmail.com" subject="TEST EMAIL" responseTimeout="10000" doc:name="sendEmail"/>
+        <expression-transformer expression="#[groovy:if(muleContext.registry.lookupFlowConstruct('CallSendEmail') != null){muleContext.registry.lookupFlowConstruct('CallSendEmail').stop()}]" doc:name="Expression"/>
     </flow>
     <sub-flow name="validateToken">
         <validation:is-true expression="#[message.inboundProperties.'client_id' == 'j32io33ise4k2qq1']" doc:name="Validation" message="Invalid token"/>
